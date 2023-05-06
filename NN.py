@@ -1,6 +1,6 @@
 import math
 import numpy as np
-import utils
+import pandas as pd
 
 
 class Network:
@@ -9,13 +9,14 @@ class Network:
     learn_rate: float = 0
     input: np.ndarray = None
 
-    def __init__(self, dimensions: list[int], learn_rate: float = 0.5, n_iters: int = 40):
+    def __init__(self, dimensions: list[int], learn_rate: float = 0.5, n_iters: int = 40, class_ind: str = 'first'):
         self.cur_out: np.ndarray = None
         self.cur_err: np.ndarray = None
         self.dimensions = dimensions
         self.num_hidden = len(dimensions) - 2
         self.learn_rate = learn_rate
         self.n_iters = n_iters
+        self.class_ind = class_ind
         self._initialise()
 
     def _initialise(self):
@@ -27,7 +28,7 @@ class Network:
         for iteration in range(self.n_iters):
             iter_err = 0.0
             for input_row_index, input_row in enumerate(self.input):
-                cur_in = input_row[:-1]
+                cur_in = input_row[1:] if self.class_ind == 'first' else input_row[:-1]
                 exp_vec = self._get_exp_vec(input_row)
                 self.cur_out = self.fwd_prop(cur_in)
                 iter_err += np.sum((np.power((exp_vec - self.cur_out), 2)))
@@ -35,8 +36,15 @@ class Network:
                 self.update_w(cur_in)
             print('iteration={}, learn_rate={}, iter_err={}'.format(iteration, self.learn_rate, iter_err))
 
+    def predict(self, test_set: np.ndarray):
+        for input_row_index, input_row in enumerate(test_set):
+            cur_in = input_row[1:] if self.class_ind == 'first' else input_row[:-1]
+            exp_class = input_row[0] if self.class_ind == 'first' else input_row[-1]
+            cur_out = self.fwd_prop(cur_in)
+            print('actual={}, predicted={}'.format(exp_class, cur_out.argmax()))
+
     def _get_exp_vec(self, input_row: np.ndarray):
-        exp_class = int(input_row[-1])
+        exp_class = int(input_row[0]) if self.class_ind == 'first' else input_row[-1]
         exp_vec = np.zeros(self.dimensions[-1])
         exp_vec[exp_class] = 1
         return exp_vec
@@ -106,7 +114,7 @@ class Layer:
 
 
 if __name__ == '__main__':
-    n = Network(dimensions=[2, 5, 7, 2], n_iters=100, learn_rate=0.5)
+    n = Network(dimensions=[784, 100, 30, 10], n_iters=500, learn_rate=0.5)
 
     # inputs = np.array([[2.7810836,2.550537003,0],
     #                    [1.465489372,2.362125076,0],
@@ -118,7 +126,14 @@ if __name__ == '__main__':
     #                    [6.922596716,1.77106367,1],
     #                    [8.675418651,-0.242068655,1],
     #                    [7.673756466,3.508563011,1]])
-    inputs = utils.make_blobs(n=100)
-
-    n.input = inputs
+    # inputs = utils.make_blobs(n=100)
+    # inputs = np.genfromtxt('data/mnist/mnist_train.csv', delimiter=',')
+    df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=10000)
+    df_test = pd.read_csv('data/mnist/mnist_test.csv', sep=',', nrows=100)
+    df_train.iloc[1:, 1:] = df_train.iloc[1:, 1:].astype(np.float32)
+    df_train.iloc[1:, 1:] = df_train.iloc[1:, 1:] / 255.0
+    df_test.iloc[1:, 1:] = df_test.iloc[1:, 1:].astype(np.float32)
+    df_test.iloc[1:, 1:] = df_test.iloc[1:, 1:] / 255.0
+    n.input = df_train.values
     n.fit()
+    n.predict(df_test.values)
