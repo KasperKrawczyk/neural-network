@@ -1,6 +1,7 @@
-import math
 import numpy as np
 import pandas as pd
+
+from activations import sigmoid, sigmoid_derivative, relu, softmax, relu_derivative, softmax_derivative
 
 
 class Network:
@@ -9,20 +10,25 @@ class Network:
     learn_rate: float = 0
     input: np.ndarray = None
 
-    def __init__(self, dimensions: list[int], learn_rate: float = 0.5, n_iters: int = 40, class_ind: str = 'first'):
+    def __init__(self,
+                 layer_list: list[(int, str)],
+                 learn_rate: float = 5e-3,
+                 n_iters: int = 50,
+                 class_ind: str = 'first'):
         self.cur_out: np.ndarray = None
         self.cur_err: np.ndarray = None
-        self.dimensions = dimensions
-        self.num_hidden = len(dimensions) - 2
+        self.layer_list = layer_list
+        self.num_hidden = len(layer_list) - 2
         self.learn_rate = learn_rate
         self.n_iters = n_iters
         self.class_ind = class_ind
         self._initialise()
 
     def _initialise(self):
-        for i in range(len(self.dimensions)):
+        for i in range(len(self.layer_list)):
             if i > 0:
-                self.network.append(Layer(self.dimensions[i], self.dimensions[i - 1]))
+                dimensions, activation = self.layer_list[i]
+                self.network.append(Layer(dimensions, self.layer_list[i - 1][0], activation))
 
     def fit(self):
         for iteration in range(self.n_iters):
@@ -45,7 +51,7 @@ class Network:
 
     def _get_exp_vec(self, input_row: np.ndarray):
         exp_class = int(input_row[0]) if self.class_ind == 'first' else input_row[-1]
-        exp_vec = np.zeros(self.dimensions[-1])
+        exp_vec = np.zeros(self.layer_list[-1][0])
         exp_vec[exp_class] = 1
         return exp_vec
 
@@ -63,8 +69,7 @@ class Network:
                 layer.cur_err = np.dot(prev_layer.cur_delta.T, prev_layer.w[:, :-1])
             else:
                 layer.cur_err = layer.cur_out - expected
-            layer.cur_delta = layer.cur_err * activation_derivative(layer.cur_out)
-            layer.cur_delta = layer.cur_delta.reshape(-1, 1)
+            layer.bk_prop()
 
     def update_w(self, cur_row: np.ndarray):
         for i in range(len(self.network)):
@@ -77,17 +82,9 @@ class Network:
             cur_layer.w[:, -1:] -= self.learn_rate * cur_layer.cur_delta
 
 
-def activation(val):
-    return 1.0 / (1.0 + math.exp(-val))
-
-
-def activation_derivative(outs: np.ndarray):
-    return outs * (1.0 - outs)
-
-
 class Layer:
 
-    def __init__(self, num_neurons: int, prev_layer_num_neurons: int):
+    def __init__(self, num_neurons: int, prev_layer_num_neurons: int, transfer_func_descr: str):
         self.num_neurons = num_neurons
         self.prev_layer_num_neurons = prev_layer_num_neurons
         self.w = np.random.rand(num_neurons, prev_layer_num_neurons + 1)
@@ -95,7 +92,22 @@ class Layer:
         self.cur_delta: np.ndarray = None
         self.cur_err: np.ndarray = None
         self.dim = self.w.shape
-        self._vec_transfer = np.vectorize(activation)
+        self.transfer_func_descr = transfer_func_descr
+        self._set_activation_func()
+
+    def _set_activation_func(self):
+        if self.transfer_func_descr == 'relu':
+            self._vec_transfer = np.vectorize(relu)
+            self._vec_transfer_derivative = np.vectorize(relu_derivative)
+        if self.transfer_func_descr == 'sigmoid':
+            self._vec_transfer = np.vectorize(sigmoid)
+            self._vec_transfer_derivative = np.vectorize(sigmoid_derivative)
+        if self.transfer_func_descr == 'tanh':
+            pass
+        if self.transfer_func_descr == 'softmax':
+            self._vec_transfer = softmax
+            self._vec_transfer_derivative = softmax_derivative
+
 
     def get_cur_err(self):
         self.cur_err = np.dot(self.w.T, self.cur_delta)
@@ -107,14 +119,25 @@ class Layer:
     def _transfer(self, mat: np.ndarray):
         return self._vec_transfer(mat)
 
+    def _transfer_derivative(self, mat: np.ndarray):
+        return self._vec_transfer_derivative(mat)
+
     def fwd_prop(self, ins: np.ndarray):
         act = self._activate(ins)
         self.cur_out = self._transfer(act)
         return self.cur_out
 
+    def bk_prop(self):
+        if self.transfer_func_descr == 'softmax':
+            self.cur_delta = self._vec_transfer_derivative(self.cur_err, self.cur_out)
+            self.cur_delta = self.cur_delta.reshape(-1, 1)
+        else:
+            self.cur_delta = self.cur_err * self._vec_transfer_derivative(self.cur_out)
+            self.cur_delta = self.cur_delta.reshape(-1, 1)
+
 
 if __name__ == '__main__':
-    n = Network(dimensions=[784, 100, 30, 10], n_iters=500, learn_rate=0.5)
+    n = Network(layer_list=[(784, ''), (100, 'relu'), (30, 'relu'), (10, 'softmax')])
 
     # inputs = np.array([[2.7810836,2.550537003,0],
     #                    [1.465489372,2.362125076,0],
@@ -128,7 +151,7 @@ if __name__ == '__main__':
     #                    [7.673756466,3.508563011,1]])
     # inputs = utils.make_blobs(n=100)
     # inputs = np.genfromtxt('data/mnist/mnist_train.csv', delimiter=',')
-    df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=10000)
+    df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=100)
     df_test = pd.read_csv('data/mnist/mnist_test.csv', sep=',', nrows=100)
     df_train.iloc[1:, 1:] = df_train.iloc[1:, 1:].astype(np.float32)
     df_train.iloc[1:, 1:] = df_train.iloc[1:, 1:] / 255.0
