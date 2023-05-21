@@ -7,22 +7,19 @@ def sigmoid(val):
     return 1.0 / (1.0 + math.exp(-val))
 
 
-def sigmoid_derivative(outs: np.ndarray):
-    return outs * (1.0 - outs)
+def sigmoid_derivative(val: np.ndarray):
+    return val * (1.0 - val)
 
 
-def relu(val):
-    return max(0.0, val)
+def relu(val: np.ndarray):
+    return np.maximum(0.0, val)
 
 
-def relu_derivative(val):
-    if val < 0:
-        return 0
-    else:
-        return 1
+def relu_derivative(val: np.ndarray):
+    return (val > 0) * 1.0
 
 
-def softmax(val):
+def softmax(val: np.ndarray):
     val = val - np.max(val)
     return np.exp(val) / np.sum(np.exp(val))
 
