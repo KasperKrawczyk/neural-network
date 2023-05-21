@@ -27,9 +27,6 @@ def softmax(val):
     return np.exp(val) / np.sum(np.exp(val))
 
 
-def softmax_derivative(cur_err, cur_out):
-    soft_max = np.reshape(cur_out, (1, -1))
-    grad = np.reshape(cur_err, (1, -1))
-
-    derivative_softmax = (soft_max * np.identity(soft_max.size) - soft_max.transpose() @ soft_max)
-    return (grad @ derivative_softmax).ravel()
+def softmax_derivative(cur_out: np.ndarray):
+    exps = np.exp(cur_out - cur_out.max())
+    return exps / np.sum(exps, axis=0) * (1 - exps / np.sum(exps, axis=0))

@@ -68,7 +68,7 @@ class Network:
                 prev_layer = self.network[i + 1]
                 layer.cur_err = np.dot(prev_layer.cur_delta.T, prev_layer.w[:, :-1])
             else:
-                layer.cur_err = layer.cur_out - expected
+                layer.cur_err = 2 * layer.cur_out - expected / layer.cur_out.shape[0]
             layer.bk_prop()
 
     def update_w(self, cur_row: np.ndarray):
@@ -88,6 +88,7 @@ class Layer:
         self.num_neurons = num_neurons
         self.prev_layer_num_neurons = prev_layer_num_neurons
         self.w = np.random.rand(num_neurons, prev_layer_num_neurons + 1)
+        self.act: np.ndarray = None
         self.cur_out: np.ndarray = None
         self.cur_delta: np.ndarray = None
         self.cur_err: np.ndarray = None
@@ -123,13 +124,13 @@ class Layer:
         return self._vec_transfer_derivative(mat)
 
     def fwd_prop(self, ins: np.ndarray):
-        act = self._activate(ins)
-        self.cur_out = self._transfer(act)
+        self.act = self._activate(ins)
+        self.cur_out = self._transfer(self.act)
         return self.cur_out
 
     def bk_prop(self):
         if self.transfer_func_descr == 'softmax':
-            self.cur_delta = self._vec_transfer_derivative(self.cur_err, self.cur_out)
+            self.cur_delta = self.cur_err * self._vec_transfer_derivative(self.cur_out)
             self.cur_delta = self.cur_delta.reshape(-1, 1)
         else:
             self.cur_delta = self.cur_err * self._vec_transfer_derivative(self.cur_out)
@@ -137,7 +138,7 @@ class Layer:
 
 
 if __name__ == '__main__':
-    n = Network(layer_list=[(784, ''), (100, 'relu'), (30, 'relu'), (10, 'softmax')])
+    n = Network(layer_list=[(784, ''), (128, 'relu'), (64, 'relu'), (10, 'softmax')])
 
     # inputs = np.array([[2.7810836,2.550537003,0],
     #                    [1.465489372,2.362125076,0],
@@ -150,13 +151,12 @@ if __name__ == '__main__':
     #                    [8.675418651,-0.242068655,1],
     #                    [7.673756466,3.508563011,1]])
     # inputs = utils.make_blobs(n=100)
-    # inputs = np.genfromtxt('data/mnist/mnist_train.csv', delimiter=',')
-    df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=100)
+    df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=1500)
     df_test = pd.read_csv('data/mnist/mnist_test.csv', sep=',', nrows=100)
-    df_train.iloc[1:, 1:] = df_train.iloc[1:, 1:].astype(np.float32)
-    df_train.iloc[1:, 1:] = df_train.iloc[1:, 1:] / 255.0
-    df_test.iloc[1:, 1:] = df_test.iloc[1:, 1:].astype(np.float32)
-    df_test.iloc[1:, 1:] = df_test.iloc[1:, 1:] / 255.0
-    n.input = df_train.values
+    train_norm = df_train.values.astype(np.float32)
+    train_norm = df_train.values / 255.0
+    test_norm = df_test.values.astype(np.float32)
+    test_norm = df_test.values / 255.0
+    n.input = train_norm
     n.fit()
-    n.predict(df_test.values)
+    n.predict(test_norm)
