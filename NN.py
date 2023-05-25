@@ -43,16 +43,16 @@ class Network:
         clipped = np.clip(self.cur_out, 1e-15, 1 - 1e-15)
         return -(exp_vec / clipped) + (1 - exp_vec) / (1 - clipped)
 
-    def _acc(self, input_classes_batch, predicted_classes_batch):
+    def _accuracy(self, input_classes_batch, predicted_classes_batch):
         return np.sum(input_classes_batch == predicted_classes_batch, axis=0) / len(input_classes_batch)
 
     def fit(self):
-        predictions = []
         for iteration in range(self.n_iters):
+            predictions = []
             for input_batch, input_classes_batch in self._batch_generator():
                 exp_vec = input_classes_batch
                 self.cur_out = self.fwd_prop(input_batch)
-                predictions.append(self._acc(np.argmax(self.cur_out, axis=1), np.argmax(exp_vec, axis=1)))
+                predictions.append(self._accuracy(np.argmax(self.cur_out, axis=1), np.argmax(exp_vec, axis=1)))
                 error = self._loss_gradient(input_classes_batch)
                 self.bk_prop(error)
             acc = np.mean(predictions) * 100
@@ -70,7 +70,7 @@ class Network:
         n_col = np.amax(input_classes) + 1
         one_hot = np.zeros((input_classes.shape[0], n_col))
         one_hot[np.arange(input_classes.shape[0]), input_classes] = 1
-        return one_hot
+        return one_hot.astype('int')
 
     def fwd_prop(self, cur_in: np.ndarray):
         cur_out = cur_in
@@ -118,7 +118,7 @@ class Layer:
 
     def fwd_prop(self, cur_in: np.ndarray):
         self.cur_in = cur_in
-        self.act = np.dot(cur_in, self.w) + self.b
+        self.act = np.dot(self.cur_in, self.w) + self.b
         self.cur_out = self._vec_transfer(self.act)
         return self.cur_out
 
@@ -148,12 +148,16 @@ if __name__ == '__main__':
     # inputs = utils.make_blobs(n=100)
     df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=1500)
     df_test = pd.read_csv('data/mnist/mnist_test.csv', sep=',', nrows=100)
-    train_norm = df_train.values[:, 1:].astype(np.float32)
+    train_norm = df_train.values[:, 1:]
     train_norm = train_norm / 255.0
-    test_norm = df_test.values[:, 1:].astype(np.float32)
+    test_norm = df_test.values[:, 1:]
     test_norm = test_norm / 255.0
 
-    n = Network(train_norm, df_train.values[:, 0], layer_list=[(784, ''), (256, 'leaky_relu'), (128, 'leaky_relu'), (10, 'softmax')])
+    y_train = df_train.values[:, 0].astype('int')
+    y_test = df_test.values[:, 0].astype('int')
+
+    n = Network(train_norm, y_train, layer_list=[(784, ''), (256, 'leaky_relu'), (128, 'leaky_relu'), (10, 'softmax')])
 
     n.fit()
-    n.predict(test_norm, df_test.values[:, 0])
+    test_out = n.fwd_prop(test_norm)
+    print(test_out)
