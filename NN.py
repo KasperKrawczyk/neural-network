@@ -134,7 +134,6 @@ class Layer:
 
 
 if __name__ == '__main__':
-
     # inputs = np.array([[2.7810836,2.550537003,0],
     #                    [1.465489372,2.362125076,0],
     #                    [3.396561688,4.400293529,0],
@@ -146,18 +145,18 @@ if __name__ == '__main__':
     #                    [8.675418651,-0.242068655,1],
     #                    [7.673756466,3.508563011,1]])
     # inputs = utils.make_blobs(n=100)
-    df_train = pd.read_csv('data/mnist/mnist_train.csv', sep=',', nrows=1500)
-    df_test = pd.read_csv('data/mnist/mnist_test.csv', sep=',', nrows=100)
-    train_norm = df_train.values[:, 1:]
-    train_norm = train_norm / 255.0
-    test_norm = df_test.values[:, 1:]
-    test_norm = test_norm / 255.0
 
-    y_train = df_train.values[:, 0].astype('int')
-    y_test = df_test.values[:, 0].astype('int')
+    with np.load('data/mnist/mnist.npz', allow_pickle=True) as file:
+        x_train, y_train = file['x_train'], file['y_train']
+        x_test, y_test = file['x_test'], file['y_test']
+    train_norm = x_test.reshape(-1, 784) / 255.0
+    test_norm = x_test.reshape(-1, 784) / 255.0
+
+    y_train = y_train.astype('int')
+    y_test = y_test.astype('int')
 
     n = Network(train_norm, y_train, layer_list=[(784, ''), (256, 'leaky_relu'), (128, 'leaky_relu'), (10, 'softmax')])
 
     n.fit()
     test_out = n.fwd_prop(test_norm)
-    print(test_out)
+    n._accuracy(np.argmax(y_test, axis=1), np.argmax(test_out, axis=1))
