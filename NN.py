@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from activations import *
+from utils import one_hot, accuracy
 
 
 class Network:
@@ -13,7 +14,7 @@ class Network:
                  inputs: np.ndarray,
                  input_classes: np.ndarray,
                  layer_list: list[(int, str)],
-                 learn_rate: float = 5e-3,
+                 learn_rate: float = 1e-3,
                  batch_size: int = 100,
                  n_iters: int = 10):
         self.cur_out: np.ndarray = None
@@ -25,7 +26,7 @@ class Network:
         self.n_iters = n_iters
         self._initialise()
         self.input = inputs
-        self.input_classes = self._to_one_hot(input_classes)
+        self.input_classes = one_hot(input_classes)
 
     def _initialise(self):
         for i in range(len(self.layer_list)):
@@ -43,16 +44,13 @@ class Network:
         clipped = np.clip(self.cur_out, 1e-15, 1 - 1e-15)
         return -(exp_vec / clipped) + (1 - exp_vec) / (1 - clipped)
 
-    def _accuracy(self, input_classes_batch, predicted_classes_batch):
-        return np.sum(input_classes_batch == predicted_classes_batch, axis=0) / len(input_classes_batch)
-
     def fit(self):
         for iteration in range(self.n_iters):
             predictions = []
             for input_batch, input_classes_batch in self._batch_generator():
                 exp_vec = input_classes_batch
                 self.cur_out = self.fwd_prop(input_batch)
-                predictions.append(self._accuracy(np.argmax(self.cur_out, axis=1), np.argmax(exp_vec, axis=1)))
+                predictions.append(accuracy(np.argmax(self.cur_out, axis=1), np.argmax(exp_vec, axis=1)))
                 error = self._loss_gradient(input_classes_batch)
                 self.bk_prop(error)
             acc = np.mean(predictions) * 100
@@ -65,12 +63,6 @@ class Network:
             exp_class = test_classes[input_row_index]
             cur_out = self.fwd_prop(cur_in)
             print('actual={}, predicted={}'.format(exp_class, cur_out.argmax()))
-
-    def _to_one_hot(self, input_classes: np.ndarray):
-        n_col = np.amax(input_classes) + 1
-        one_hot = np.zeros((input_classes.shape[0], n_col))
-        one_hot[np.arange(input_classes.shape[0]), input_classes] = 1
-        return one_hot.astype('int')
 
     def fwd_prop(self, cur_in: np.ndarray):
         cur_out = cur_in
@@ -123,7 +115,7 @@ class Layer:
         return self.cur_out
 
     def bk_prop(self, output_err: np.ndarray, learn_rate: float):
-        gradient = self._vec_transfer_derivative(self.cur_out) * output_err
+        gradient = self._vec_transfer_derivative(self.act) * output_err
         self.input_err = np.dot(gradient, self.w.T)
         self.delta = np.dot(self.cur_in.T, gradient)
 
@@ -149,14 +141,15 @@ if __name__ == '__main__':
     with np.load('data/mnist/mnist.npz', allow_pickle=True) as file:
         x_train, y_train = file['x_train'], file['y_train']
         x_test, y_test = file['x_test'], file['y_test']
-    train_norm = x_test.reshape(-1, 784) / 255.0
+    train_norm = x_train.reshape(-1, 784) / 255.0
     test_norm = x_test.reshape(-1, 784) / 255.0
 
     y_train = y_train.astype('int')
     y_test = y_test.astype('int')
 
-    n = Network(train_norm, y_train, layer_list=[(784, ''), (256, 'leaky_relu'), (128, 'leaky_relu'), (10, 'softmax')])
+    n = Network(train_norm, y_train, layer_list=[(784, ''), (256, 'leaky_relu'), (128, 'leaky_relu'), (64, 'leaky_relu'), (10, 'softmax')])
 
     n.fit()
     test_out = n.fwd_prop(test_norm)
-    n._accuracy(np.argmax(y_test, axis=1), np.argmax(test_out, axis=1))
+
+    print(accuracy(np.argmax(one_hot(y_test), axis=1), np.argmax(test_out, axis=1)) * 100)
